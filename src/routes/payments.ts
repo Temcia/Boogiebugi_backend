@@ -58,8 +58,16 @@ router.post(
         currency: order.currency,
       });
     } catch (err) {
+      // Log full error object for debugging — Razorpay errors are non-standard objects
+      console.error("[Razorpay] create-order failed:", JSON.stringify(err, null, 2));
+      console.error("[Razorpay] error message:", err instanceof Error ? err.message : String(err));
+
       const message =
-        err instanceof Error ? err.message : "Failed to create payment order";
+        err instanceof Error
+          ? err.message
+          : (err as { description?: string; error?: { description?: string } })?.error?.description
+            ?? (err as { description?: string })?.description
+            ?? "Failed to create payment order";
 
       // Surface config errors clearly in dev
       if (message.includes("must be set")) {

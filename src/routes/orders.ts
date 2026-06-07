@@ -156,6 +156,85 @@ router.post(
     const shipping = subtotal >= 299900 ? 0 : 9900; // ₹2,999 threshold / ₹99 shipping
     const total = subtotal + shipping - (body.discount ?? 0);
 
+    // ── Resolve variantIds ────────────────────────────────────────────────────
+    // The cart uses synthetic variantIds like "productId-size-color".
+    // We must resolve each one to a real Variant row before inserting.
+    const resolvedItems: Array<{
+      variantId: string;
+      quantity: number;
+      priceAtOrder: number;
+    }> = [];
+
+    for (const item of body.items) {
+      // Check if it's already a real CUID/UUID (not a composite string)
+      // Real IDs from our DB look like: cmq1ji6yu000a5wzpjza1lu3m (Prisma CUID)
+      // Fake IDs look like: productId-size-color
+      const parts = item.variantId.split("-");
+      const isFakeId = parts.length >= 3 && parts[0].startsWith("cm");
+
+      if (!isFakeId) {
+        // Already a real variant ID — verify it exists
+        const variant = await prisma.variant.findUnique({
+          where: { id: item.variantId },
+        });
+        if (!variant) {
+          return sendError(res, "NOT_FOUND", `Variant ${item.variantId} not found`, 404);
+        }
+        resolvedItems.push({
+          variantId: item.variantId,
+          quantity: item.quantity,
+          priceAtOrder: item.priceAtOrder,
+        });
+      } else {
+        // Fake composite ID: "productId-size-color" — resolve to real variant
+        // Format: first segment = productId (a CUID), remaining = size, last = color
+        const productId = parts[0];
+        // size is the second segment
+        const size = parts[1];
+        // color is everything after productId-size (may contain dashes)
+        const color = parts.slice(2).join("-");
+
+        const variant = await prisma.variant.findFirst({
+          where: {
+            productId,
+            size,
+            // color may be empty string or null — match both
+            OR: [
+              { color: color || null },
+              { color: color || "" },
+              ...(color === "Default" || color === "" ? [{ color: null }, { color: "" }] : []),
+            ],
+          },
+        });
+
+        if (!variant) {
+          // Last resort: get any variant for this product with matching size
+          const fallback = await prisma.variant.findFirst({
+            where: { productId, size },
+          });
+          if (!fallback) {
+            return sendError(
+              res,
+              "NOT_FOUND",
+              `No variant found for product ${productId} with size ${size}`,
+              404
+            );
+          }
+          resolvedItems.push({
+            variantId: fallback.id,
+            quantity: item.quantity,
+            priceAtOrder: item.priceAtOrder,
+          });
+        } else {
+          resolvedItems.push({
+            variantId: variant.id,
+            quantity: item.quantity,
+            priceAtOrder: item.priceAtOrder,
+          });
+        }
+      }
+    }
+
     // ── Create order + items in a transaction ────────────────────────────────
     const order = await prisma.$transaction(async (tx) => {
       const newOrder = await tx.order.create({
@@ -168,7 +247,7 @@ router.post(
           couponCode: body.couponCode ?? null,
           paymentId: body.paymentId,
           items: {
-            create: body.items.map((item) => ({
+            create: resolvedItems.map((item) => ({
               variantId: item.variantId,
               quantity: item.quantity,
               priceAtOrder: item.priceAtOrder,

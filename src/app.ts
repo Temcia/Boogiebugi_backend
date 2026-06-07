@@ -9,7 +9,22 @@ import { rateLimit } from "./middleware/rateLimit";
 const app = express();
 
 app.use(helmet());
-app.use(cors({ origin: process.env.CORS_ORIGIN || "*" }));
+const allowedOrigins = process.env.CORS_ORIGIN 
+  ? process.env.CORS_ORIGIN.split(',').map(o => o.trim())
+  : ["http://localhost:3000"];
+
+app.use(cors({ 
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps, curl, or server-to-server)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.includes("*")) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true 
+}));
 app.use(morgan("dev"));
 app.use(
   express.json({

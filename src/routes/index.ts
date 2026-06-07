@@ -8,6 +8,8 @@ import wishlistRouter from "./wishlist";
 import adminRouter from "./admin";
 import authRouter from "./auth";
 import categoriesRouter from "./categories";
+import addressesRouter from "./addresses";
+import reviewsRouter from "./reviews";
 
 const router = Router();
 
@@ -20,5 +22,7 @@ router.use("/wishlist", wishlistRouter);
 router.use("/admin", adminRouter);
 router.use("/auth", authRouter);
 router.use("/categories", categoriesRouter);
+router.use("/addresses", addressesRouter);
+router.use("/reviews", reviewsRouter);
 
 export default router;
