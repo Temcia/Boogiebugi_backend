@@ -167,7 +167,7 @@ router.get("/orders", auth, requireAdmin, async (req: AuthenticatedRequest, res:
 
 router.patch("/orders/:id", auth, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const { status, awbNumber } = req.body as { status?: string; awbNumber?: string };
 
     const data: Record<string, unknown> = {};
@@ -189,7 +189,7 @@ router.patch("/orders/:id", auth, requireAdmin, async (req: AuthenticatedRequest
       },
     });
 
-    sendSuccess(res, { order: formatAdminOrder(order) });
+    sendSuccess(res, { order: formatAdminOrder(order as unknown as PrismaOrderWithRelations) });
   } catch (err) {
     console.error("Update order error:", err);
     sendError(res, "INTERNAL", "Failed to update order", 500);
@@ -259,7 +259,7 @@ router.post("/coupons", auth, requireAdmin, async (req: AuthenticatedRequest, re
 
 router.patch("/coupons/:id", auth, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const { isActive, code, type, value, minOrderValue, maxUses, expiresAt } = req.body as {
       isActive?: boolean;
       code?: string;
@@ -293,7 +293,7 @@ router.patch("/coupons/:id", auth, requireAdmin, async (req: AuthenticatedReques
 
 router.delete("/coupons/:id", auth, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     await prisma.coupon.delete({ where: { id } });
     sendSuccess(res, { message: "Coupon deleted" });
   } catch (err) {
